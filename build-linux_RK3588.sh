@@ -23,7 +23,7 @@ make install
 cd -
 
 # relu版本
-cd install/rknn_yolov5_demo_Linux/ && ./rknn_yolov5_demo ./model/RK3588/yolov5s-640-640.rknn ../../720p60hz.mp4
+cd install/rknn_yolo_demo_Linux/ && ./rknn_yolo_demo ./model/RK3588/yolo11m.rknn ../../720p60hz.mp4
 # 使用摄像头
 # cd install/rknn_yolov5_demo_Linux/ && ./rknn_yolov5_demo ./model/RK3588/yolov5s-640-640.rknn 0
 
