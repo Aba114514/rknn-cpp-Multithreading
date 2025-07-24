@@ -34,7 +34,9 @@ include_directories(${RGA_PATH}/include)
 find_package(OpenCV REQUIRED)
 
 set(CMAKE_INSTALL_RPATH "lib")
-
+# 添加下面这行来打印 CMake 找到的 OpenCV 路径
+message(STATUS "Found OpenCV_DIR: ${OpenCV_DIR}") 
+include_directories(${OpenCV_INCLUDE_DIRS})
 
 # rknn_yolo_demo
 include_directories( ${CMAKE_SOURCE_DIR}/include)
