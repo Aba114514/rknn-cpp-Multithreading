@@ -46,7 +46,6 @@ add_executable(rknn_yolo_demo
         src/postprocess.cc
         src/preprocess.cc
         src/Yolo11.cc
-        src/dma_alloc.cpp
 )
 
 target_link_libraries(rknn_yolo_demo
