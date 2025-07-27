@@ -29,3 +29,19 @@ sudo echo userspace > /sys/class/devfreq/fdab0000.npu/governor
 sudo echo 1000000000 > /sys/class/devfreq/fdab0000.npu/userspace/set_freq
 echo "NPU当前频率/NPU current frequency:"
 sudo cat /sys/class/devfreq/fdab0000.npu/cur_freq
+
+# GPU定频
+echo "GPU可用频率/GPU available frequency:"
+sudo cat /sys/class/devfreq/fb000000.gpu-panthor/available_frequencies    
+sudo echo userspace > /sys/class/devfreq/fb000000.gpu-panthor/governor
+sudo echo 1000000000 > /sys/class/devfreq/fb000000.gpu-panthor/userspace/set_freq
+echo "GPU当前频率/GPU current frequency:"
+sudo cat /sys/class/devfreq/fb000000.gpu-panthor/cur_freq
+
+# DDR定频
+echo "DDR可用频率/DDR available frequency:"
+sudo cat /sys/class/devfreq/dmc/available_frequencies    
+sudo echo userspace > /sys/class/devfreq/dmc/governor
+sudo echo 2112000000 > /sys/class/devfreq/dmc/userspace/set_freq
+echo "DDR当前频率/DDR current frequency:"
+sudo cat /sys/class/devfreq/dmc/cur_freq
