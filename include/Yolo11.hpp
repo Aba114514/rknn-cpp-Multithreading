@@ -1,11 +1,14 @@
+// फाइल का नाम: include/Yolo11.hpp
+
 #ifndef YOLO11_HPP
 #define YOLO11_HPP
 
 #include "rknn_api.h"
-#include "postprocess.h" // 使用新的postprocess.h
-#include "preprocess.h"  // 预处理可以复用
+#include "common_types.h"
 #include "opencv2/core/core.hpp"
 #include <mutex>
+#include <string>
+#include <vector>
 
 class Yolo11
 {
@@ -17,26 +20,23 @@ private:
     rknn_input_output_num io_num;
     rknn_tensor_attr* input_attrs;
     rknn_tensor_attr* output_attrs;
-    
+
     int model_width;
     int model_height;
     int model_channel;
     bool is_quant;
 
-public:
-    // 公共getter方法，供postprocess函数访问
-    int get_model_width() const { return model_width; }
-    int get_model_height() const { return model_height; }
-    int get_io_num_n_output() const { return io_num.n_output; }
-    bool get_is_quant() const { return is_quant; }
-    rknn_tensor_attr* get_output_attrs() const { return output_attrs; }
+    // 内部辅助函数，用于加载模型文件
+    static unsigned char *load_model(const char *filename, int *model_size);
 
 public:
     Yolo11(const std::string &model_path);
-    int init(rknn_context *ctx_in, bool isChild); // 保持与rknnPool兼容的init接口
-    rknn_context *get_pctx();
-    cv::Mat infer(cv::Mat &ori_img);
     ~Yolo11();
+
+    int init(rknn_context *ctx_in, bool isChild);
+    rknn_context *get_pctx();
+
+    object_detect_result_list infer(const cv::Mat &orig_img);
 };
 
 #endif // YOLO11_HPP

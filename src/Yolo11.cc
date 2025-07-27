@@ -1,64 +1,75 @@
+// फाइल का नाम: src/Yolo11.cc
+
 #include "Yolo11.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include <stdio.h>
-#include <stdlib.h>
-#include <algorithm>
-#include <vector>
-
-#include "rga.h"
-#include "im2d.h"
+#include "postprocess.h"
+#include "preprocess.h"
 #include "coreNum.hpp"
+#include <vector>
+#include <cstdio>
+#include <cstdlib>
 
-// 定义一个全局互斥锁，用于保护所有对RGA硬件的并发访问
-static std::mutex rga_mutex;
-
-static unsigned char *load_model(const char *filename, int *model_size)
+// 内部辅助函数，用于从磁盘加载模型文件
+unsigned char* Yolo11::load_model(const char *filename, int *model_size)
 {
     FILE *fp = fopen(filename, "rb");
-    if (fp == NULL) {
+    if (fp == nullptr) {
         printf("fopen %s fail!\n", filename);
-        return NULL;
+        return nullptr;
     }
     fseek(fp, 0, SEEK_END);
     int size = ftell(fp);
     fseek(fp, 0, SEEK_SET);
     unsigned char *data = (unsigned char *)malloc(size);
+    if (data == nullptr) {
+        fclose(fp);
+        printf("malloc model buffer fail!\n");
+        return nullptr;
+    }
     fread(data, 1, size, fp);
     fclose(fp);
     *model_size = size;
     return data;
 }
 
-Yolo11::Yolo11(const std::string &path) : model_path(path) {
-    init_post_process();
+// 构造函数：初始化成员变量
+Yolo11::Yolo11(const std::string &path)
+    : model_path(path), rknn_ctx(0), input_attrs(nullptr), output_attrs(nullptr)
+{
 }
 
+// 析构函数：释放所有资源
 Yolo11::~Yolo11()
 {
     if (rknn_ctx != 0) {
         rknn_destroy(rknn_ctx);
     }
-    if (input_attrs) free(input_attrs);
-    if (output_attrs) free(output_attrs);
-    deinit_post_process();
+    if (input_attrs) {
+        free(input_attrs);
+        input_attrs = nullptr;
+    }
+    if (output_attrs) {
+        free(output_attrs);
+        output_attrs = nullptr;
+    }
 }
 
+// 获取rknn_context的指针，供rknnPool初始化时使用
 rknn_context* Yolo11::get_pctx() {
     return &rknn_ctx;
 }
 
+// 初始化函数：加载并配置RKNN模型
 int Yolo11::init(rknn_context *ctx_in, bool isChild)
 {
     int ret;
     int model_len = 0;
     unsigned char *model = load_model(model_path.c_str(), &model_len);
-    if (model == NULL) { return -1; }
+    if (model == nullptr) { return -1; }
 
     if (isChild) {
         ret = rknn_dup_context(ctx_in, &rknn_ctx);
     } else {
-        ret = rknn_init(&rknn_ctx, model, model_len, 0, NULL);
+        ret = rknn_init(&rknn_ctx, model, model_len, 0, nullptr);
     }
     free(model);
 
@@ -67,40 +78,29 @@ int Yolo11::init(rknn_context *ctx_in, bool isChild)
         return -1;
     }
 
-    // NPU核心绑定逻辑
-    rknn_core_mask core_mask;
+    // 绑定NPU核心
+    rknn_core_mask core_mask = RKNN_NPU_CORE_AUTO;
     int core_id = get_core_num();
-    switch (core_id)
-    {
-        case 0:
-            core_mask = RKNN_NPU_CORE_0;
-            printf("Instance init on NPU Core 0\n");
-            break;
-        case 1:
-            core_mask = RKNN_NPU_CORE_1;
-            printf("Instance init on NPU Core 1\n");
-            break;
-        case 2:
-            core_mask = RKNN_NPU_CORE_2;
-            printf("Instance init on NPU Core 2\n");
-            break;
-        default:
-            core_mask = RKNN_NPU_CORE_AUTO;
-            printf("Instance init on NPU Core AUTO\n");
-            break;
-    }
+    if (core_id == 0) core_mask = RKNN_NPU_CORE_0;
+    else if (core_id == 1) core_mask = RKNN_NPU_CORE_1;
+    else if (core_id == 2) core_mask = RKNN_NPU_CORE_2;
+
     ret = rknn_set_core_mask(rknn_ctx, core_mask);
-    if (ret < 0)
-    {
+    if (ret < 0) {
         printf("rknn_set_core_mask error ret=%d\n", ret);
         return -1;
     }
 
+    // 查询模型的输入输出信息
     ret = rknn_query(rknn_ctx, RKNN_QUERY_IN_OUT_NUM, &io_num, sizeof(io_num));
     if (ret != RKNN_SUCC) return -1;
 
     input_attrs = (rknn_tensor_attr*)malloc(io_num.n_input * sizeof(rknn_tensor_attr));
     output_attrs = (rknn_tensor_attr*)malloc(io_num.n_output * sizeof(rknn_tensor_attr));
+    if (!input_attrs || !output_attrs) {
+        printf("malloc for input/output attrs fail!\n");
+        return -1;
+    }
 
     for (int i = 0; i < io_num.n_input; i++) {
         input_attrs[i].index = i;
@@ -114,6 +114,7 @@ int Yolo11::init(rknn_context *ctx_in, bool isChild)
         if (ret != RKNN_SUCC) return -1;
     }
 
+    // 获取模型输入的维度信息
     if (input_attrs[0].fmt == RKNN_TENSOR_NCHW) {
         model_channel = input_attrs[0].dims[1];
         model_height = input_attrs[0].dims[2];
@@ -124,51 +125,31 @@ int Yolo11::init(rknn_context *ctx_in, bool isChild)
         model_channel = input_attrs[0].dims[3];
     }
 
+    // ** 关键修正：使用正确的逻辑来判断模型是否为量化模型 **
     is_quant = (output_attrs[0].qnt_type == RKNN_TENSOR_QNT_AFFINE_ASYMMETRIC && output_attrs[0].type == RKNN_TENSOR_INT8);
 
     return 0;
 }
 
-cv::Mat Yolo11::infer(cv::Mat &orig_img)
+// 推理函数：执行预处理、NPU推理和后处理
+object_detect_result_list Yolo11::infer(const cv::Mat &orig_img)
 {
+    // 锁定此实例，确保线程安全
     std::lock_guard<std::mutex> instance_lock(mtx);
+
+    object_detect_result_list od_results;
+    memset(&od_results, 0, sizeof(od_results));
     int ret;
 
+    // 1. 预处理: 使用RGA硬件将输入图像缩放并转换为RGB格式
     cv::Mat resized_img(model_height, model_width, CV_8UC3);
-
-    {
-        // --- 预处理：使用全局锁保护 RGA 硬件访问 ---
-        std::lock_guard<std::mutex> rga_lock(rga_mutex);
-
-        // 使用基于 size 的 importbuffer API, 解决 >4G 内存访问问题
-        size_t src_size = orig_img.total() * orig_img.elemSize();
-        size_t dst_size = resized_img.total() * resized_img.elemSize();
-
-        rga_buffer_handle_t src_handle = importbuffer_virtualaddr(orig_img.data, src_size);
-        rga_buffer_handle_t dst_handle = importbuffer_virtualaddr(resized_img.data, dst_size);
-
-        IM_STATUS rga_status = IM_STATUS_FAILED;
-
-        if (src_handle && dst_handle) {
-            rga_buffer_t src_rga = wrapbuffer_handle(src_handle, orig_img.cols, orig_img.rows, RK_FORMAT_BGR_888);
-            rga_buffer_t dst_rga = wrapbuffer_handle(dst_handle, resized_img.cols, resized_img.rows, RK_FORMAT_RGB_888);
-
-            // 使用RGA硬件加速完成 BGR->RGB 转换和图像缩放
-            rga_status = imresize(src_rga, dst_rga);
-        } else {
-            fprintf(stderr, "RGA importbuffer failed for imresize. src_handle=%d, dst_handle=%d\n", src_handle, dst_handle);
-        }
-
-        if (src_handle) releasebuffer_handle(src_handle);
-        if (dst_handle) releasebuffer_handle(dst_handle);
-
-        if (rga_status != IM_STATUS_SUCCESS) {
-            fprintf(stderr, "RGA imresize failed with status %d: %s\n", rga_status, imStrError(rga_status));
-            return orig_img;
-        }
+    ret = resize_rga(orig_img, resized_img);
+    if (ret != 0) {
+        printf("Pre-process (resize_rga) failed.\n");
+        return od_results; // 返回空结果
     }
 
-    // --- 模型推理 ---
+    // 2. NPU推理: 设置输入并运行模型
     rknn_input inputs[1];
     memset(inputs, 0, sizeof(inputs));
     inputs[0].index = 0;
@@ -178,45 +159,42 @@ cv::Mat Yolo11::infer(cv::Mat &orig_img)
     inputs[0].buf = resized_img.data;
 
     ret = rknn_inputs_set(rknn_ctx, io_num.n_input, inputs);
-    if (ret < 0) return orig_img;
+    if (ret < 0) {
+        printf("rknn_inputs_set fail! ret=%d\n", ret);
+        return od_results;
+    }
 
     ret = rknn_run(rknn_ctx, nullptr);
-    if (ret < 0) return orig_img;
+    if (ret < 0) {
+        printf("rknn_run fail! ret=%d\n", ret);
+        return od_results;
+    }
 
     rknn_output outputs[io_num.n_output];
     memset(outputs, 0, sizeof(outputs));
     for (int i = 0; i < io_num.n_output; i++) {
-        outputs[i].want_float = 0;
+        outputs[i].want_float = 0; // 后处理需要原始INT8数据进行反量化
     }
-    ret = rknn_outputs_get(rknn_ctx, io_num.n_output, outputs, NULL);
-    if (ret < 0) return orig_img;
+    ret = rknn_outputs_get(rknn_ctx, io_num.n_output, outputs, nullptr);
+    if (ret < 0) {
+        printf("rknn_outputs_get fail! ret=%d\n", ret);
+        // 即使获取失败，也要尝试释放，防止内存泄漏
+        rknn_outputs_release(rknn_ctx, io_num.n_output, outputs);
+        return od_results;
+    }
 
-    // --- 后处理 ---
-    object_detect_result_list od_results;
-    float scale_w = (float)orig_img.cols / model_width;
-    float scale_h = (float)orig_img.rows / model_height;
+    // 3. 后处理: 解码NPU输出，得到结构化检测结果
     BOX_RECT letter_box;
-    letter_box.scale_w = scale_w;
-    letter_box.scale_h = scale_h;
-    post_process(this, outputs, &letter_box, BOX_THRESH, NMS_THRESH, &od_results);
+    // 因为是直接resize，所以计算宽高缩放比用于坐标还原
+    letter_box.scale_w = (float)orig_img.cols / model_width;
+    letter_box.scale_h = (float)orig_img.rows / model_height;
 
-    // --- 关键修改：根据您的最终决策，使用稳定可靠的OpenCV CPU函数进行绘制 ---
-    for (int i = 0; i < od_results.count; i++) {
-        object_detect_result *det_result = &(od_results.results[i]);
-        char text[256];
-        sprintf(text, "%s %.1f%%", coco_cls_to_name(det_result->cls_id), det_result->prop * 100);
+    post_process(outputs, io_num.n_output, output_attrs, is_quant,
+                 model_width, model_height, &letter_box, &od_results);
 
-        int x1 = det_result->box.left;
-        int y1 = det_result->box.top;
-        int x2 = det_result->box.right;
-        int y2 = det_result->box.bottom;
-
-        // 使用 OpenCV 的 rectangle 函数绘制检测框
-        rectangle(orig_img, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(0, 255, 0), 3);
-        // 使用 OpenCV 的 putText 函数绘制文本
-        putText(orig_img, text, cv::Point(x1, y1 > 12 ? y1 - 12 : y1 + 12), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
-    }
-
+    // 释放rknn_outputs_get分配的内存
     rknn_outputs_release(rknn_ctx, io_num.n_output, outputs);
-    return orig_img;
+
+    // 返回结构化数据
+    return od_results;
 }
