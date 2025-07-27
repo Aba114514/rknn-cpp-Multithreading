@@ -7,16 +7,18 @@
 #include <vector>
 #include <iostream>
 #include <queue>
-#include <stdlib.h>
+#include <stdlib.h> // For getenv()
+#include <ctype.h>  // For isdigit()
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/videoio.hpp"
 #include "opencv2/highgui.hpp"
+#include "opencv2/imgproc.hpp" // For cvtColor
 
 #include "Yolo11.hpp"
 #include "rknnPool.hpp"
 #include "Visualizer.hpp"
-#include "postprocess.h" // <--- 补充头文件以使用 init/deinit
+#include "postprocess.h"
 
 // 定义输出模式
 enum class OutputMode {
@@ -25,6 +27,10 @@ enum class OutputMode {
     RTP_STREAM
 };
 
+/**
+ * @brief 检查程序是否在图形化桌面环境中运行
+ * @return 如果检测到桌面环境 (X11 or Wayland) 则返回 true, 否则返回 false
+ */
 bool isDesktopEnvironmentAvailable() {
     const char* display = getenv("DISPLAY");
     if (display != nullptr && display[0] != '\0') {
@@ -48,15 +54,11 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    // ===============================================
-    //           == 补充的变量定义 ==
-    // ===============================================
     char *model_name = argv[1];
     char *video_name = argv[2];
     OutputMode output_mode = OutputMode::WINDOW_DISPLAY;
     std::string rtp_url;
     bool is_streaming = false;
-    // ===============================================
 
     for (int i = 3; i < argc; ++i) {
         if (std::string(argv[i]) == "--stream" && (i + 1) < argc) {
@@ -90,11 +92,7 @@ int main(int argc, char **argv)
     init_post_process();
 
     // --- 初始化视频捕捉 ---
-    // ===============================================
-    //           == 补充的变量定义 ==
-    // ===============================================
     cv::VideoCapture capture;
-    // ===============================================
     std::string video_source = video_name;
 
     if (video_source.length() == 1 && isdigit(video_source[0])) {
@@ -122,12 +120,8 @@ int main(int argc, char **argv)
     }
     printf("Successfully opened source with resolution: %dx%d @ %f FPS\n", frame_width, frame_height, fps_ref);
 
-    // --- 初始化输出 ---
-    // ===============================================
-    //           == 补充的变量定义 ==
-    // ===============================================
+    // --- 初始化视频输出 ---
     cv::VideoWriter video_writer;
-    // ===============================================
     std::string gst_output_pipeline;
 
     switch (output_mode) {
@@ -179,9 +173,13 @@ int main(int argc, char **argv)
                 cv::Mat original_frame = frame_queue.front();
                 frame_queue.pop();
 
-
-
                 Visualizer::draw(original_frame, results);
+
+                // 如果是推流模式，mpph264enc 需要RGB格式，此处进行转换
+                if (output_mode == OutputMode::RTP_STREAM) {
+                    cv::cvtColor(original_frame, original_frame, cv::COLOR_BGR2RGB);
+                }
+
                 video_writer.write(original_frame);
                 frames++;
             }
@@ -195,6 +193,7 @@ int main(int argc, char **argv)
         }
     }
 
+    // 清理流水线中剩余的帧
     while(!frame_queue.empty())
     {
         object_detect_result_list results;
@@ -202,6 +201,12 @@ int main(int argc, char **argv)
             cv::Mat original_frame = frame_queue.front();
             frame_queue.pop();
             Visualizer::draw(original_frame, results);
+
+            // 同样，如果是推流模式，需要转换颜色
+            if (output_mode == OutputMode::RTP_STREAM) {
+                cv::cvtColor(original_frame, original_frame, cv::COLOR_BGR2RGB);
+            }
+
             video_writer.write(original_frame);
             frames++;
         } else {
