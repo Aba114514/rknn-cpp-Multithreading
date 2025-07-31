@@ -1,4 +1,4 @@
-// फाइल का नाम: include/Yolo11.hpp
+// 文件: include/Yolo11.hpp
 
 #ifndef YOLO11_HPP
 #define YOLO11_HPP
@@ -9,6 +9,8 @@
 #include <mutex>
 #include <string>
 #include <vector>
+
+#include "dma_alloc.h" // <--- 包含dma_alloc.h
 
 class Yolo11
 {
@@ -26,7 +28,11 @@ private:
     int model_channel;
     bool is_quant;
 
-    // 内部辅助函数，用于加载模型文件
+    // --- 新增：用于零拷贝的DMA缓冲区成员 ---
+    int resized_img_dma_fd;
+    void* resized_img_dma_va;
+    size_t resized_img_dma_size;
+
     static unsigned char *load_model(const char *filename, int *model_size);
 
 public:
