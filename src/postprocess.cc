@@ -1,4 +1,4 @@
-// फाइल का नाम: src/postprocess.cc
+//src/postprocess.cc
 
 #include "postprocess.h"
 #include <math.h>
@@ -9,9 +9,9 @@
 #include <sys/time.h>
 #include <set>
 #include <vector>
-#include <algorithm> // <<-- 优化点#3：为 std::sort 和 std::unique 引入头文件
+#include <algorithm> 
 
-#define LABEL_NALE_TXT_PATH "./model/coco_80_labels_list.txt"
+#define LABEL_NALE_TXT_PATH "./model/target.txt"
 
 static char *labels[OBJ_CLASS_NUM];
 

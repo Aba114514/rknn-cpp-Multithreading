@@ -1,0 +1,5 @@
+car
+pedestrian
+trunk
+roof
+bus

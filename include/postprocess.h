@@ -1,4 +1,4 @@
-// फाइल का नाम: include/postprocess.h
+//include/postprocess.h
 
 #ifndef _RKNN_YOLO_DEMO_POSTPROCESS_H_
 #define _RKNN_YOLO_DEMO_POSTPROCESS_H_

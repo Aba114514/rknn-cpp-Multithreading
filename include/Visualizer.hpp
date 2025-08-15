@@ -1,4 +1,4 @@
-// फाइल का नाम: include/Visualizer.hpp
+// include/Visualizer.hpp
 
 #ifndef VISUALIZER_HPP
 #define VISUALIZER_HPP

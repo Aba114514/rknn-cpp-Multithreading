@@ -27,19 +27,17 @@ echo "Build finished. Running demo..."
 
 # 运行demo，使用 install 目录下的可执行文件
 # 注意：路径是相对于项目根目录的
-INSTALL_DIR=${ROOT_PWD}/install/rknn_yolo_demo_Linux
-DEMO_EXECUTABLE=${INSTALL_DIR}/rknn_yolo_demo
+INSTALL_DIR=${ROOT_PWD}/install/Aerial_detection_demo_Linux
+DEMO_EXECUTABLE=${INSTALL_DIR}/Aerial_detection_demo
 MODEL_PATH=${INSTALL_DIR}/model/RK3588/yolo11m.rknn
 VIDEO_PATH=${ROOT_PWD}/720p60hz.mp4
 
 # 确保可执行文件存在并有执行权限
 if [ -f "${DEMO_EXECUTABLE}" ]; then
     chmod +x ${DEMO_EXECUTABLE}
-    cd ${INSTALL_DIR} && ./rknn_yolo_demo ./model/RK3588/yolo11m.rknn ../../720p60hz.mp4
+    cd ${INSTALL_DIR} && ./Aerial_detection_demo ./model/RK3588/yolo11m.rknn ../../1080p60hz.mov
 else
     echo "Error: Demo executable not found at ${DEMO_EXECUTABLE}"
     exit 1
 fi
 
-# 使用摄像头的示例
-# cd ${INSTALL_DIR} && ./rknn_yolo_demo ./model/RK3588/yolo11m.rknn 0

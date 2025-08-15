@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(rknn_yolo_demo)
+project(Aerial_detection_demo)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,7 +33,7 @@ message(STATUS "Found OpenCV_DIR: ${OpenCV_DIR}")
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 # 添加可执行文件及其所有源文件
-add_executable(rknn_yolo_demo
+add_executable(Aerial_detection_demo
         src/main.cc
         src/postprocess.cc
         src/preprocess.cc
@@ -43,17 +43,17 @@ add_executable(rknn_yolo_demo
 )
 
 # 链接所有需要的库
-target_link_libraries(rknn_yolo_demo
+target_link_libraries(Aerial_detection_demo
         ${RKNN_RT_LIB}
         ${OpenCV_LIBS}
         ${RGA_LIB}
 )
 
 # install target and libraries
-set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install/rknn_yolo_demo_${CMAKE_SYSTEM_NAME})
+set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install/Aerial_detection_demo_${CMAKE_SYSTEM_NAME})
 set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 
-install(TARGETS rknn_yolo_demo DESTINATION ./)
+install(TARGETS Aerial_detection_demo DESTINATION ./)
 install(PROGRAMS ${RKNN_RT_LIB} DESTINATION lib)
 install(PROGRAMS ${RGA_LIB} DESTINATION lib)
 install(DIRECTORY model DESTINATION ./)
