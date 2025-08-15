@@ -51,8 +51,8 @@
 1.  **克隆项目**
 
     ```bash
-    git clone <your-repo-url>
-    cd <your-repo-name>
+    git clone https://github.com/Aba114514/Aerial_Detection_with_RK3588.git
+    cd Aerial_Detection_with_RK3588
     ```
 
 2.  **准备模型和视频**
